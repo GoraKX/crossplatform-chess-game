@@ -1,0 +1,9 @@
+# Flutter build and tooling
+build/
+.dart_tool/
+.packages
+
+# Android wrapper artifacts
+android/gradlew.bat
+android/gradle/wrapper/gradle-wrapper.jar
+android/.gradle/
