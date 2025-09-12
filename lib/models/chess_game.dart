@@ -105,9 +105,8 @@ class ChessGame extends ChangeNotifier {
     if (_gameStatus != GameStatus.ongoing) return;
     
     // If no piece is selected or clicking on a different piece of the same color
-    if (_selectedRow == null || _selectedCol == null || 
+    if (_selectedRow == null || _selectedCol == null ||
         (_board[row][col] != null && _board[row][col]!.color == _currentPlayer)) {
-      
       // Only select if the piece belongs to the current player
       if (_board[row][col] != null && _board[row][col]!.color == _currentPlayer) {
         _selectedRow = row;
@@ -116,15 +115,16 @@ class ChessGame extends ChangeNotifier {
       } else {
         _clearSelection();
       }
+      notifyListeners();
     } else {
       // Try to move the selected piece
       if (_validMoves[row][col]) {
         _makeMove(_selectedRow!, _selectedCol!, row, col);
+      } else {
+        _clearSelection();
+        notifyListeners();
       }
-      _clearSelection();
     }
-    
-    notifyListeners();
   }
 
   void _clearSelection() {
@@ -302,12 +302,16 @@ class ChessGame extends ChangeNotifier {
     piece.hasMoved = true;
     
     // Switch players
-    _currentPlayer = _currentPlayer == PieceColor.white 
-        ? PieceColor.black 
+    _currentPlayer = _currentPlayer == PieceColor.white
+        ? PieceColor.black
         : PieceColor.white;
-    
+
     // Check for game ending conditions
     _updateGameStatus();
+
+    // Clear selection and notify listeners
+    _clearSelection();
+    notifyListeners();
   }
 
   void _updateGameStatus() {
