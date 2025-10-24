@@ -1,4 +1,9 @@
+import 'dart:async';
+import 'dart:math';
+
 import 'package:flutter/foundation.dart';
+
+import 'game_settings.dart';
 
 enum PieceType { pawn, rook, knight, bishop, queen, king }
 enum PieceColor { white, black }
@@ -66,6 +71,14 @@ class ChessGame extends ChangeNotifier {
   int? _selectedRow;
   int? _selectedCol;
   List<List<bool>> _validMoves = List.generate(8, (index) => List.filled(8, false));
+  bool _vsAI = true;
+  PieceColor _humanColor = PieceColor.white;
+  PieceColor _aiColor = PieceColor.black;
+  Difficulty _difficulty = Difficulty.medium;
+  String _playerName = '';
+  String _opponentName = 'AI';
+  bool _isAiThinking = false;
+  final Random _random = Random();
 
   ChessGame() {
     _initializeBoard();
@@ -79,6 +92,33 @@ class ChessGame extends ChangeNotifier {
   int? get selectedRow => _selectedRow;
   int? get selectedCol => _selectedCol;
   List<List<bool>> get validMoves => _validMoves;
+  bool get isSinglePlayer => _vsAI;
+  PieceColor get humanColor => _humanColor;
+  PieceColor get aiColor => _aiColor;
+  Difficulty get difficulty => _difficulty;
+  String get playerName => _playerName;
+  String get opponentName => _opponentName;
+  bool get isAiThinking => _isAiThinking;
+
+  String playerNameForColor(PieceColor color) {
+    return color == _humanColor ? _playerName : _opponentName;
+  }
+
+  void configureGame({
+    required bool vsAI,
+    required PieceColor humanColor,
+    required Difficulty difficulty,
+    required String playerName,
+    String? opponentName,
+  }) {
+    _vsAI = vsAI;
+    _humanColor = humanColor;
+    _aiColor = humanColor == PieceColor.white ? PieceColor.black : PieceColor.white;
+    _difficulty = difficulty;
+    _playerName = playerName;
+    _opponentName = opponentName ?? (vsAI ? 'AI' : 'Player 2');
+    resetGame();
+  }
 
   void _initializeBoard() {
     _board = List.generate(8, (index) => List.filled(8, null));
@@ -102,8 +142,10 @@ class ChessGame extends ChangeNotifier {
   }
 
   void selectSquare(int row, int col) {
-    if (_gameStatus != GameStatus.ongoing) return;
-    
+    if (_gameStatus != GameStatus.ongoing || _isAiThinking) return;
+
+    if (_vsAI && _currentPlayer == _aiColor) return;
+
     // If no piece is selected or clicking on a different piece of the same color
     if (_selectedRow == null || _selectedCol == null ||
         (_board[row][col] != null && _board[row][col]!.color == _currentPlayer)) {
@@ -135,143 +177,13 @@ class ChessGame extends ChangeNotifier {
 
   void _calculateValidMoves(int row, int col) {
     _validMoves = List.generate(8, (index) => List.filled(8, false));
-    
+
     final piece = _board[row][col];
     if (piece == null) return;
-    
-    switch (piece.type) {
-      case PieceType.pawn:
-        _calculatePawnMoves(row, col, piece);
-        break;
-      case PieceType.rook:
-        _calculateRookMoves(row, col, piece);
-        break;
-      case PieceType.knight:
-        _calculateKnightMoves(row, col, piece);
-        break;
-      case PieceType.bishop:
-        _calculateBishopMoves(row, col, piece);
-        break;
-      case PieceType.queen:
-        _calculateQueenMoves(row, col, piece);
-        break;
-      case PieceType.king:
-        _calculateKingMoves(row, col, piece);
-        break;
-    }
-  }
 
-  void _calculatePawnMoves(int row, int col, ChessPiece piece) {
-    final direction = piece.color == PieceColor.white ? -1 : 1;
-    final startRow = piece.color == PieceColor.white ? 6 : 1;
-    
-    // Move forward one square
-    if (_isValidSquare(row + direction, col) && _board[row + direction][col] == null) {
-      _validMoves[row + direction][col] = true;
-      
-      // Move forward two squares from starting position
-      if (row == startRow && _board[row + 2 * direction][col] == null) {
-        _validMoves[row + 2 * direction][col] = true;
-      }
-    }
-    
-    // Capture diagonally
-    for (final dcol in [-1, 1]) {
-      final newRow = row + direction;
-      final newCol = col + dcol;
-      if (_isValidSquare(newRow, newCol) && 
-          _board[newRow][newCol] != null && 
-          _board[newRow][newCol]!.color != piece.color) {
-        _validMoves[newRow][newCol] = true;
-      }
-    }
-  }
-
-  void _calculateRookMoves(int row, int col, ChessPiece piece) {
-    // Horizontal and vertical directions
-    const directions = [(0, 1), (0, -1), (1, 0), (-1, 0)];
-    
-    for (final (drow, dcol) in directions) {
-      for (int i = 1; i < 8; i++) {
-        final newRow = row + drow * i;
-        final newCol = col + dcol * i;
-        
-        if (!_isValidSquare(newRow, newCol)) break;
-        
-        if (_board[newRow][newCol] == null) {
-          _validMoves[newRow][newCol] = true;
-        } else {
-          if (_board[newRow][newCol]!.color != piece.color) {
-            _validMoves[newRow][newCol] = true;
-          }
-          break;
-        }
-      }
-    }
-  }
-
-  void _calculateKnightMoves(int row, int col, ChessPiece piece) {
-    const knightMoves = [
-      (-2, -1), (-2, 1), (-1, -2), (-1, 2),
-      (1, -2), (1, 2), (2, -1), (2, 1)
-    ];
-    
-    for (final (drow, dcol) in knightMoves) {
-      final newRow = row + drow;
-      final newCol = col + dcol;
-      
-      if (_isValidSquare(newRow, newCol) && 
-          (_board[newRow][newCol] == null || 
-           _board[newRow][newCol]!.color != piece.color)) {
-        _validMoves[newRow][newCol] = true;
-      }
-    }
-  }
-
-  void _calculateBishopMoves(int row, int col, ChessPiece piece) {
-    // Diagonal directions
-    const directions = [(1, 1), (1, -1), (-1, 1), (-1, -1)];
-    
-    for (final (drow, dcol) in directions) {
-      for (int i = 1; i < 8; i++) {
-        final newRow = row + drow * i;
-        final newCol = col + dcol * i;
-        
-        if (!_isValidSquare(newRow, newCol)) break;
-        
-        if (_board[newRow][newCol] == null) {
-          _validMoves[newRow][newCol] = true;
-        } else {
-          if (_board[newRow][newCol]!.color != piece.color) {
-            _validMoves[newRow][newCol] = true;
-          }
-          break;
-        }
-      }
-    }
-  }
-
-  void _calculateQueenMoves(int row, int col, ChessPiece piece) {
-    _calculateRookMoves(row, col, piece);
-    _calculateBishopMoves(row, col, piece);
-  }
-
-  void _calculateKingMoves(int row, int col, ChessPiece piece) {
-    const directions = [
-      (-1, -1), (-1, 0), (-1, 1),
-      (0, -1),           (0, 1),
-      (1, -1),  (1, 0),  (1, 1)
-    ];
-    
-    for (final (drow, dcol) in directions) {
-      final newRow = row + drow;
-      final newCol = col + dcol;
-      
-      if (_isValidSquare(newRow, newCol) && 
-          (_board[newRow][newCol] == null || 
-           _board[newRow][newCol]!.color != piece.color)) {
-        _validMoves[newRow][newCol] = true;
-      }
+    final destinations = _getDestinationsForPiece(_board, row, col);
+    for (final (newRow, newCol) in destinations) {
+      _validMoves[newRow][newCol] = true;
     }
   }
 
@@ -312,6 +224,8 @@ class ChessGame extends ChangeNotifier {
     // Clear selection and notify listeners
     _clearSelection();
     notifyListeners();
+
+    _scheduleAiTurnIfNeeded();
   }
 
   void _updateGameStatus() {
@@ -325,32 +239,409 @@ class ChessGame extends ChangeNotifier {
     _gameStatus = GameStatus.ongoing;
     _moveHistory.clear();
     _clearSelection();
+    _isAiThinking = false;
     notifyListeners();
+
+    _scheduleAiTurnIfNeeded();
   }
 
   void undoMove() {
     if (_moveHistory.isEmpty) return;
-    
+
     final lastMove = _moveHistory.removeLast();
-    
+
     // Restore the piece to its original position
     final piece = _board[lastMove.toRow][lastMove.toCol];
     _board[lastMove.fromRow][lastMove.fromCol] = piece;
     _board[lastMove.toRow][lastMove.toCol] = lastMove.capturedPiece;
-    
+
     // Restore hasMoved flag (simplified - doesn't track original state)
-    if (piece != null && _moveHistory.where((m) => 
+    if (piece != null && _moveHistory.where((m) =>
         m.fromRow == lastMove.fromRow && m.fromCol == lastMove.fromCol).isEmpty) {
       piece.hasMoved = false;
     }
-    
+
     // Switch players back
-    _currentPlayer = _currentPlayer == PieceColor.white 
-        ? PieceColor.black 
+    _currentPlayer = _currentPlayer == PieceColor.white
+        ? PieceColor.black
         : PieceColor.white;
-    
+
+    _isAiThinking = false;
     _clearSelection();
     _updateGameStatus();
     notifyListeners();
+
+    _scheduleAiTurnIfNeeded();
+  }
+
+  void _scheduleAiTurnIfNeeded() {
+    if (!_vsAI || _gameStatus != GameStatus.ongoing ||
+        _currentPlayer != _aiColor || _isAiThinking) {
+      return;
+    }
+
+    _isAiThinking = true;
+    notifyListeners();
+
+    Future.delayed(const Duration(milliseconds: 350), () {
+      if (_gameStatus != GameStatus.ongoing) {
+        _isAiThinking = false;
+        notifyListeners();
+        return;
+      }
+
+      final move = _chooseAiMove();
+      if (move != null) {
+        _makeMove(move.fromRow, move.fromCol, move.toRow, move.toCol);
+      }
+
+      _isAiThinking = false;
+      notifyListeners();
+    });
+  }
+
+  Move? _chooseAiMove() {
+    final possibleMoves = _getAllMovesForColor(_board, _aiColor);
+    if (possibleMoves.isEmpty) return null;
+
+    switch (_difficulty) {
+      case Difficulty.easy:
+        return possibleMoves[_random.nextInt(possibleMoves.length)];
+      case Difficulty.medium:
+        final capturingMoves =
+            possibleMoves.where((move) => move.capturedPiece != null).toList();
+        if (capturingMoves.isNotEmpty) {
+          final bestValue = capturingMoves
+              .map((move) => _pieceValue(move.capturedPiece!.type))
+              .reduce(max);
+          final bestCaptures = capturingMoves
+              .where((move) => _pieceValue(move.capturedPiece!.type) == bestValue)
+              .toList();
+          return bestCaptures[_random.nextInt(bestCaptures.length)];
+        }
+        return possibleMoves[_random.nextInt(possibleMoves.length)];
+      case Difficulty.hard:
+        final move = _chooseBestMoveWithMinimax(possibleMoves);
+        return move ?? possibleMoves[_random.nextInt(possibleMoves.length)];
+    }
+  }
+
+  Move? _chooseBestMoveWithMinimax(List<Move> moves) {
+    Move? bestMove;
+    int bestScore = -1000000;
+
+    for (final move in moves) {
+      final boardCopy = _cloneBoard(_board);
+      _applyMoveOnBoard(boardCopy, move);
+      final score = _minimax(boardCopy, 2, false, -1000000, 1000000);
+      if (bestMove == null || score > bestScore) {
+        bestScore = score;
+        bestMove = move;
+      }
+    }
+
+    return bestMove ?? (moves.isNotEmpty
+        ? moves[_random.nextInt(moves.length)]
+        : null);
+  }
+
+  int _minimax(
+    List<List<ChessPiece?>> board,
+    int depth,
+    bool maximizingPlayer,
+    int alpha,
+    int beta,
+  ) {
+    if (depth == 0) {
+      return _evaluateBoard(board);
+    }
+
+    final currentColor = maximizingPlayer ? _aiColor : _humanColor;
+    final moves = _getAllMovesForColor(board, currentColor);
+    if (moves.isEmpty) {
+      return _evaluateBoard(board);
+    }
+
+    if (maximizingPlayer) {
+      var value = -1000000;
+      for (final move in moves) {
+        final newBoard = _cloneBoard(board);
+        _applyMoveOnBoard(newBoard, move);
+        value = max(value, _minimax(newBoard, depth - 1, false, alpha, beta));
+        alpha = max(alpha, value);
+        if (beta <= alpha) break;
+      }
+      return value;
+    } else {
+      var value = 1000000;
+      for (final move in moves) {
+        final newBoard = _cloneBoard(board);
+        _applyMoveOnBoard(newBoard, move);
+        value = min(value, _minimax(newBoard, depth - 1, true, alpha, beta));
+        beta = min(beta, value);
+        if (beta <= alpha) break;
+      }
+      return value;
+    }
+  }
+
+  int _evaluateBoard(List<List<ChessPiece?>> board) {
+    int score = 0;
+    for (final row in board) {
+      for (final piece in row) {
+        if (piece == null) continue;
+        final value = _pieceValue(piece.type);
+        if (piece.color == _aiColor) {
+          score += value;
+        } else {
+          score -= value;
+        }
+      }
+    }
+    return score;
+  }
+
+  int _pieceValue(PieceType type) {
+    switch (type) {
+      case PieceType.pawn:
+        return 100;
+      case PieceType.knight:
+        return 320;
+      case PieceType.bishop:
+        return 330;
+      case PieceType.rook:
+        return 500;
+      case PieceType.queen:
+        return 900;
+      case PieceType.king:
+        return 20000;
+    }
+  }
+
+  List<Move> _getAllMovesForColor(
+    List<List<ChessPiece?>> board,
+    PieceColor color,
+  ) {
+    final moves = <Move>[];
+
+    for (int row = 0; row < 8; row++) {
+      for (int col = 0; col < 8; col++) {
+        final piece = board[row][col];
+        if (piece == null || piece.color != color) continue;
+
+        final destinations = _getDestinationsForPiece(board, row, col);
+        for (final (newRow, newCol) in destinations) {
+          moves.add(
+            Move(
+              fromRow: row,
+              fromCol: col,
+              toRow: newRow,
+              toCol: newCol,
+              capturedPiece: board[newRow][newCol]?.copy(),
+            ),
+          );
+        }
+      }
+    }
+
+    return moves;
+  }
+
+  List<List<ChessPiece?>> _cloneBoard(List<List<ChessPiece?>> board) {
+    return List.generate(
+      8,
+      (row) => List.generate(8, (col) => board[row][col]?.copy()),
+    );
+  }
+
+  void _applyMoveOnBoard(List<List<ChessPiece?>> board, Move move) {
+    final piece = board[move.fromRow][move.fromCol];
+    if (piece == null) return;
+
+    board[move.toRow][move.toCol] = piece;
+    board[move.fromRow][move.fromCol] = null;
+    piece.hasMoved = true;
+  }
+
+  List<(int, int)> _getDestinationsForPiece(
+    List<List<ChessPiece?>> board,
+    int row,
+    int col,
+  ) {
+    final piece = board[row][col];
+    if (piece == null) return const <(int, int)>[];
+
+    switch (piece.type) {
+      case PieceType.pawn:
+        return _getPawnMoves(board, row, col, piece);
+      case PieceType.rook:
+        return _collectLinearMoves(
+          board,
+          row,
+          col,
+          piece,
+          const [(0, 1), (0, -1), (1, 0), (-1, 0)],
+        );
+      case PieceType.knight:
+        return _getKnightMoves(board, row, col, piece);
+      case PieceType.bishop:
+        return _collectLinearMoves(
+          board,
+          row,
+          col,
+          piece,
+          const [(1, 1), (1, -1), (-1, 1), (-1, -1)],
+        );
+      case PieceType.queen:
+        final rookMoves = _collectLinearMoves(
+          board,
+          row,
+          col,
+          piece,
+          const [(0, 1), (0, -1), (1, 0), (-1, 0)],
+        );
+        final bishopMoves = _collectLinearMoves(
+          board,
+          row,
+          col,
+          piece,
+          const [(1, 1), (1, -1), (-1, 1), (-1, -1)],
+        );
+        return [...rookMoves, ...bishopMoves];
+      case PieceType.king:
+        return _getKingMoves(board, row, col, piece);
+    }
+  }
+
+  List<(int, int)> _getPawnMoves(
+    List<List<ChessPiece?>> board,
+    int row,
+    int col,
+    ChessPiece piece,
+  ) {
+    final moves = <(int, int)>[];
+    final direction = piece.color == PieceColor.white ? -1 : 1;
+    final startRow = piece.color == PieceColor.white ? 6 : 1;
+    final oneStepRow = row + direction;
+
+    if (_isValidSquare(oneStepRow, col) && board[oneStepRow][col] == null) {
+      moves.add((oneStepRow, col));
+
+      final twoStepRow = row + 2 * direction;
+      if (row == startRow && _isValidSquare(twoStepRow, col) &&
+          board[twoStepRow][col] == null) {
+        moves.add((twoStepRow, col));
+      }
+    }
+
+    for (final dcol in [-1, 1]) {
+      final captureRow = row + direction;
+      final captureCol = col + dcol;
+      if (_isValidSquare(captureRow, captureCol)) {
+        final target = board[captureRow][captureCol];
+        if (target != null && target.color != piece.color) {
+          moves.add((captureRow, captureCol));
+        }
+      }
+    }
+
+    return moves;
+  }
+
+  List<(int, int)> _collectLinearMoves(
+    List<List<ChessPiece?>> board,
+    int row,
+    int col,
+    ChessPiece piece,
+    List<(int, int)> directions,
+  ) {
+    final moves = <(int, int)>[];
+
+    for (final (drow, dcol) in directions) {
+      for (int i = 1; i < 8; i++) {
+        final newRow = row + drow * i;
+        final newCol = col + dcol * i;
+
+        if (!_isValidSquare(newRow, newCol)) break;
+
+        final target = board[newRow][newCol];
+        if (target == null) {
+          moves.add((newRow, newCol));
+        } else {
+          if (target.color != piece.color) {
+            moves.add((newRow, newCol));
+          }
+          break;
+        }
+      }
+    }
+
+    return moves;
+  }
+
+  List<(int, int)> _getKnightMoves(
+    List<List<ChessPiece?>> board,
+    int row,
+    int col,
+    ChessPiece piece,
+  ) {
+    const knightMoves = [
+      (-2, -1),
+      (-2, 1),
+      (-1, -2),
+      (-1, 2),
+      (1, -2),
+      (1, 2),
+      (2, -1),
+      (2, 1),
+    ];
+
+    final moves = <(int, int)>[];
+
+    for (final (drow, dcol) in knightMoves) {
+      final newRow = row + drow;
+      final newCol = col + dcol;
+      if (_isValidSquare(newRow, newCol)) {
+        final target = board[newRow][newCol];
+        if (target == null || target.color != piece.color) {
+          moves.add((newRow, newCol));
+        }
+      }
+    }
+
+    return moves;
+  }
+
+  List<(int, int)> _getKingMoves(
+    List<List<ChessPiece?>> board,
+    int row,
+    int col,
+    ChessPiece piece,
+  ) {
+    const directions = [
+      (-1, -1),
+      (-1, 0),
+      (-1, 1),
+      (0, -1),
+      (0, 1),
+      (1, -1),
+      (1, 0),
+      (1, 1),
+    ];
+
+    final moves = <(int, int)>[];
+
+    for (final (drow, dcol) in directions) {
+      final newRow = row + drow;
+      final newCol = col + dcol;
+      if (_isValidSquare(newRow, newCol)) {
+        final target = board[newRow][newCol];
+        if (target == null || target.color != piece.color) {
+          moves.add((newRow, newCol));
+        }
+      }
+    }
+
+    return moves;
   }
 }

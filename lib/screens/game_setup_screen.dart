@@ -1,9 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../models/chess_game.dart';
+import '../models/game_settings.dart';
 import 'chess_board_screen.dart';
-
-enum Difficulty { easy, medium, hard }
 
 class GameSetupScreen extends StatefulWidget {
   const GameSetupScreen({super.key});
@@ -14,6 +13,7 @@ class GameSetupScreen extends StatefulWidget {
 
 class _GameSetupScreenState extends State<GameSetupScreen> {
   final TextEditingController _nameController = TextEditingController();
+  OpponentType _opponentType = OpponentType.ai;
   bool _isPlayerWhite = true;
   Difficulty _selectedDifficulty = Difficulty.medium;
 
@@ -62,11 +62,12 @@ class _GameSetupScreenState extends State<GameSetupScreen> {
                       prefixIcon: Icon(Icons.account_circle),
                     ),
                     textCapitalization: TextCapitalization.words,
+                    onChanged: (_) => setState(() {}),
                   ),
                 ),
-                
+
                 const SizedBox(height: 24),
-                
+
                 // Piece Color Selection
                 _buildSectionCard(
                   title: 'Choose Your Pieces',
@@ -95,44 +96,95 @@ class _GameSetupScreenState extends State<GameSetupScreen> {
                     ],
                   ),
                 ),
-                
+
                 const SizedBox(height: 24),
-                
-                // Difficulty Selection
+
+                // Opponent Selection
                 _buildSectionCard(
-                  title: 'Select Difficulty',
-                  icon: Icons.psychology,
-                  child: Column(
-                    children: [
-                      _buildDifficultyOption(
-                        difficulty: Difficulty.easy,
-                        title: 'Easy',
-                        description: 'Perfect for beginners',
-                        icon: Icons.sentiment_satisfied,
-                        color: Colors.green,
-                      ),
-                      const SizedBox(height: 8),
-                      _buildDifficultyOption(
-                        difficulty: Difficulty.medium,
-                        title: 'Medium',
-                        description: 'Balanced challenge',
-                        icon: Icons.sentiment_neutral,
-                        color: Colors.orange,
-                      ),
-                      const SizedBox(height: 8),
-                      _buildDifficultyOption(
-                        difficulty: Difficulty.hard,
-                        title: 'Hard',
-                        description: 'For experienced players',
-                        icon: Icons.sentiment_very_dissatisfied,
-                        color: Colors.red,
-                      ),
-                    ],
+                  title: 'Select Opponent',
+                  icon: Icons.groups,
+                  child: Wrap(
+                    spacing: 12,
+                    runSpacing: 12,
+                    children: OpponentType.values.map((type) {
+                      final isSelected = _opponentType == type;
+                      final color = Theme.of(context).colorScheme.primary;
+                      return ChoiceChip(
+                        labelPadding: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 10,
+                        ),
+                        avatar: Icon(
+                          type.icon,
+                          color: isSelected ? Colors.white : color,
+                        ),
+                        label: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(
+                              type.label,
+                              style: TextStyle(
+                                fontWeight: FontWeight.bold,
+                                color: isSelected ? Colors.white : color,
+                              ),
+                            ),
+                            const SizedBox(height: 2),
+                            Text(
+                              type.description,
+                              style: TextStyle(
+                                fontSize: 11,
+                                color: isSelected
+                                    ? Colors.white70
+                                    : Theme.of(context).textTheme.bodySmall?.color,
+                              ),
+                            ),
+                          ],
+                        ),
+                        selected: isSelected,
+                        onSelected: (_) => setState(() => _opponentType = type),
+                        selectedColor: color,
+                        side: BorderSide(color: color.withOpacity(0.4)),
+                        backgroundColor: Colors.grey.shade100,
+                      );
+                    }).toList(),
                   ),
                 ),
-                
+
+                const SizedBox(height: 24),
+
+                // Difficulty Selection
+                AnimatedOpacity(
+                  duration: const Duration(milliseconds: 250),
+                  opacity: _opponentType == OpponentType.ai ? 1 : 0.45,
+                  child: IgnorePointer(
+                    ignoring: _opponentType != OpponentType.ai,
+                    child: _buildSectionCard(
+                      title: 'Select Difficulty',
+                      icon: Icons.psychology,
+                      child: Column(
+                        children: Difficulty.values.map((difficulty) {
+                          return Padding(
+                            padding: const EdgeInsets.only(bottom: 8.0),
+                            child: _buildDifficultyOption(difficulty: difficulty),
+                          );
+                        }).toList(),
+                      ),
+                    ),
+                  ),
+                ),
+
+                if (_opponentType != OpponentType.ai)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 12.0),
+                    child: Text(
+                      'Difficulty applies only when playing against the AI.',
+                      style: Theme.of(context).textTheme.bodySmall,
+                    ),
+                  ),
+
                 const Spacer(),
-                
+
                 // Start Game Button
                 Padding(
                   padding: const EdgeInsets.symmetric(vertical: 20),
@@ -249,13 +301,10 @@ class _GameSetupScreenState extends State<GameSetupScreen> {
 
   Widget _buildDifficultyOption({
     required Difficulty difficulty,
-    required String title,
-    required String description,
-    required IconData icon,
-    required Color color,
   }) {
+    final color = difficulty.color;
     final isSelected = _selectedDifficulty == difficulty;
-    
+
     return GestureDetector(
       onTap: () => setState(() => _selectedDifficulty = difficulty),
       child: Container(
@@ -270,21 +319,21 @@ class _GameSetupScreenState extends State<GameSetupScreen> {
         ),
         child: Row(
           children: [
-            Icon(icon, color: color, size: 28),
+            Icon(difficulty.icon, color: color, size: 28),
             const SizedBox(width: 12),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    title,
+                    difficulty.label,
                     style: TextStyle(
                       fontWeight: FontWeight.bold,
                       color: isSelected ? color : Colors.black87,
                     ),
                   ),
                   Text(
-                    description,
+                    difficulty.description,
                     style: TextStyle(
                       fontSize: 12,
                       color: isSelected ? color.withOpacity(0.8) : Colors.grey.shade600,
@@ -303,28 +352,30 @@ class _GameSetupScreenState extends State<GameSetupScreen> {
 
   void _startGame(BuildContext context) {
     final chessGame = Provider.of<ChessGame>(context, listen: false);
-    
-    // Set up the game with user preferences
-    // Note: This assumes the ChessGame model has methods to set player preferences
-    // You may need to update the ChessGame model to include these features
-    
+    final playerName = _nameController.text.trim();
+    final humanColor = _isPlayerWhite ? PieceColor.white : PieceColor.black;
+    final isSinglePlayer = _opponentType == OpponentType.ai;
+
+    chessGame.configureGame(
+      vsAI: isSinglePlayer,
+      humanColor: humanColor,
+      difficulty: _selectedDifficulty,
+      playerName: playerName,
+      opponentName: isSinglePlayer ? 'AI' : 'Player 2',
+    );
+
+    final welcomeMessage = isSinglePlayer
+        ? 'Welcome $playerName! You are playing as ${humanColor.name} on ${_selectedDifficulty.label} difficulty.'
+        : 'Welcome $playerName! Local multiplayer match as ${humanColor.name} is ready.';
+
     Navigator.pushAndRemoveUntil(
       context,
       MaterialPageRoute(
-        builder: (context) => const ChessBoardScreen(),
-      ),
-      (route) => false, // Remove all previous routes
-    );
-    
-    // Show a welcome message
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(
-          'Welcome ${_nameController.text}! You are playing as ${_isPlayerWhite ? "White" : "Black"} on ${_selectedDifficulty.name} difficulty.',
+        builder: (context) => ChessBoardScreen(
+          welcomeMessage: welcomeMessage,
         ),
-        backgroundColor: Theme.of(context).colorScheme.primary,
-        duration: const Duration(seconds: 3),
       ),
+      (route) => false,
     );
   }
 }
